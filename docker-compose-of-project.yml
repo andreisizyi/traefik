@@ -1,0 +1,64 @@
+version: '3.4'
+
+services:
+  wordpress:
+    container_name: ${PROJECT_PREFIX}-wordpress
+    restart: ${RESTART}
+    build:
+      context: ./
+      dockerfile: Dockerfile
+    environment:
+      - WORDPRESS_DB_HOST=${PROJECT_PREFIX}-db:3306
+      - WORDPRESS_DB_USER=${PROJECT_PREFIX}_of
+      - WORDPRESS_DB_PASSWORD=${PROJECT_PASSWORD_DB}
+      - WORDPRESS_DB_NAME=${PROJECT_PREFIX}_wordpress_db
+    volumes:
+      - ./project:/var/www/html
+      - ./data/wordpress/supervisor/conf.d:/etc/supervisor/conf.d
+      - ./data/wordpress/php:/usr/local/etc/php/conf.d
+    networks:
+      - web
+
+  nginx:
+    container_name: ${PROJECT_PREFIX}-nginx
+    image: nginx
+    restart: ${RESTART}
+    volumes:
+      - ./project:/var/www/html
+      - ./data/nginx/conf.d:/etc/nginx/conf.d
+      - ./data/nginx/.htpasswd:/etc/nginx/.htpasswd
+      - ./data/certbot:/etc/nginx/ssl
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nginx2-http.rule=Host(`your-domain`)"
+      - "traefik.http.routers.nginx2-http.entrypoints=web"
+      - "traefik.http.routers.nginx2-http.middlewares=https-redirect"
+      - "traefik.http.routers.nginx2-app.rule=Host(`your-domain`)"
+      - "traefik.http.routers.nginx2-app.entrypoints=websecure"
+      - "traefik.http.routers.nginx2-app.tls.certresolver=myresolver"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+    depends_on:
+      - wordpress
+    networks:
+      - web
+
+  db:
+    container_name: ${PROJECT_PREFIX}-db
+    image: mariadb:latest
+    restart: ${RESTART}
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${PROJECT_PREFIX}_wordpress_db
+      - MYSQL_USER=${PROJECT_PREFIX}_of
+      - MYSQL_PASSWORD=${PROJECT_PASSWORD_DB}
+    volumes:
+      - ai_service_wp_mariadb_data:/var/lib/mysql
+    networks:
+      - web
+
+volumes:
+  ai_service_wp_mariadb_data:
+
+networks:
+  web:
+    external: true
